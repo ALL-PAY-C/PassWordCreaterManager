@@ -1,0 +1,22 @@
+{
+  "name": "password-creater-manager",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Offline password derivation app for Windows and Android",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@fontsource/material-symbols-rounded": "^5.2.0",
+    "@fontsource/roboto-serif": "^5.2.0",
+    "@material/material-color-utilities": "^0.3.0",
+    "@material/web": "^2.5.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.0",
+    "vite": "^7.1.0"
+  }
+}

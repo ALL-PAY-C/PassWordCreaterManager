@@ -1,0 +1,40 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+
+# logs
+*.log
+
+# macOS
+.DS_Store
+
+# android build outputs
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
+
+# desktop build output
+*.exe
+*.pdb
+bin/
+obj/
+web.zip
+
+# archives
+*.zip
+
+# local reference material
+ref/
+
+# local scratch
+.cache/
+desktop/build/
+.gradle-home/
+.idea/
+*.iml
+launcher.log
