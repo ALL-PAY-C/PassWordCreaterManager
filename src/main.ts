@@ -45,6 +45,7 @@ const icon = (name: string, slot?: string): HTMLElement => h("md-icon", slot ? {
 
 interface Field extends HTMLElement {
   value: string;
+  type: string;
   focus(): void;
 }
 interface Toggle extends HTMLElement {
@@ -62,6 +63,23 @@ const field = (label: string, opts: { type?: string; value?: string; placeholder
     value: opts.value,
     placeholder: opts.placeholder,
   });
+
+const pwField = (label: string, opts: { value?: string; placeholder?: string } = {}): HTMLElement => {
+  const btn = h("md-icon-button", { slot: "trailing-icon", "aria-label": "显示或隐藏简单密码" }, icon("visibility"));
+  const el = h(
+    "md-outlined-text-field",
+    { label, type: "password", value: opts.value, placeholder: opts.placeholder },
+    btn,
+  );
+  btn.addEventListener("click", (ev: Event) => {
+    ev.preventDefault();
+    const f = el as unknown as Field;
+    const reveal = f.type === "password";
+    f.type = reveal ? "text" : "password";
+    btn.replaceChildren(icon(reveal ? "visibility_off" : "visibility"));
+  });
+  return el;
+};
 
 const val = (el: HTMLElement): string => (el as unknown as Field).value ?? "";
 const setVal = (el: HTMLElement, v: string): void => {
@@ -140,6 +158,7 @@ function snackbar(text: string, action?: { label: string; run: () => void }): vo
 }
 
 function openDialog(title: string, body: HTMLElement, actions: HTMLElement[] = []): DialogEl {
+  body.slot = "content";
   const dialog = h("md-dialog", {}, h("div", { slot: "headline" }, title), body, h("div", { slot: "actions" }, ...actions));
   document.body.append(dialog);
   const el = dialog as unknown as DialogEl;
@@ -377,7 +396,7 @@ function renderVault(): void {
     return;
   }
 
-  const searchF = field("搜索", { type: "search", placeholder: "备注或站点" });
+  const searchF = field("搜索", { type: "search", placeholder: "站点或服务" });
   searchF.addEventListener("input", () => {
     search = val(searchF);
     renderList();
@@ -428,7 +447,7 @@ function renderList(): void {
   host.replaceChildren();
   const q = search.trim().toLowerCase();
   const mine = entries.filter((e) => e.accountId === acc.id);
-  const rows = q ? mine.filter((e) => (e.note ?? "").toLowerCase().includes(q) || e.site.toLowerCase().includes(q)) : mine;
+  const rows = q ? mine.filter((e) => e.site.toLowerCase().includes(q)) : mine;
 
   if (!rows.length) {
     host.append(emptyState(mine.length === 0));
@@ -448,7 +467,7 @@ function emptyState(firstTime: boolean): HTMLElement {
     h(
       "ol",
       { class: "steps" },
-      h("li", {}, "点右下角新建条目，填站点和备注，例如 github.com / 代码托管。"),
+      h("li", {}, "点右下角新建条目，填站点或服务名，例如 github.com，或某个 App 的名字。"),
       h("li", {}, "填你本来会用的简单密码，例如 github-2019。它不会发给任何网站。"),
       h("li", {}, "下方立刻算出强密码，复制到网站注册即可。以后回到这里，同样的输入永远得到同样的结果。"),
     ),
@@ -465,9 +484,9 @@ function entryCard(e: VaultEntry, acc: Account): HTMLElement {
   let derived = "";
   let seq = 0;
 
-  const title = (): string => e.note?.trim() || e.site.trim() || "未命名条目";
+  const title = (): string => e.site.trim() || "未命名条目";
   const titleEl = h("span", { class: "entry-title" }, title());
-  const subEl = h("span", { class: "entry-sub" }, e.site.trim() || "还没填站点");
+  const subEl = h("span", { class: "entry-sub" }, e.site.trim() || "还没填站点或服务");
   const previewEl = h("span", { class: "entry-pw" }, "••••••••");
   const avatarEl = h("span", { class: "entry-avatar" }, (title()[0] ?? "?").toUpperCase());
   const head = h(
@@ -480,10 +499,9 @@ function entryCard(e: VaultEntry, acc: Account): HTMLElement {
   );
   (head.lastElementChild as HTMLElement).classList.add("entry-chev");
 
-  const noteF = field("备注", { value: e.note ?? "", placeholder: "这个账号是干什么的" });
-  const siteF = field("站点或服务", { value: e.site, placeholder: "github.com" });
+  const siteF = field("站点或服务", { value: e.site, placeholder: "github.com 或 App 名" });
   const urlF = field("网址", { value: e.url ?? "", placeholder: "https://" });
-  const simpleF = field("简单密码", { type: "password", value: e.password, placeholder: "你本来会用的那一串" });
+  const simpleF = pwField("简单密码", { value: e.password, placeholder: "你本来会用的那一串" });
   const counterF = field("序号", { type: "number", value: String(e.counter) });
 
   const pwValue = h("span", { class: "pw-value" }, "……");
@@ -499,7 +517,7 @@ function entryCard(e: VaultEntry, acc: Account): HTMLElement {
   const recompute = async (): Promise<void> => {
     const mine = ++seq;
     if (!e.site.trim()) {
-      pwValue.textContent = "先填站点";
+      pwValue.textContent = "先填站点或服务";
       pwBox.classList.add("is-veiled");
       derived = "";
       return;
@@ -529,17 +547,13 @@ function entryCard(e: VaultEntry, acc: Account): HTMLElement {
         e.updatedAt = Date.now();
         await db.putEntry({ ...e });
         titleEl.textContent = title();
-        subEl.textContent = e.site.trim() || "还没填站点";
+        subEl.textContent = e.site.trim() || "还没填站点或服务";
         avatarEl.textContent = (title()[0] ?? "?").toUpperCase();
         void recompute();
       })();
     }, 240);
   };
 
-  noteF.addEventListener("input", () => {
-    e.note = val(noteF);
-    persist();
-  });
   siteF.addEventListener("input", () => {
     e.site = val(siteF);
     persist();
@@ -578,7 +592,7 @@ function entryCard(e: VaultEntry, acc: Account): HTMLElement {
   copyBtn.addEventListener("click", () => {
     void (async () => {
       if (!derived) await recompute();
-      if (!derived) return snackbar("先填站点再复制");
+      if (!derived) return snackbar("先填站点或服务再复制");
       await copyText(derived);
     })();
   });
@@ -607,7 +621,7 @@ function entryCard(e: VaultEntry, acc: Account): HTMLElement {
   const body = h(
     "div",
     { class: "entry-body" },
-    h("div", { class: "entry-fields" }, noteF, siteF, urlF, simpleF),
+    h("div", { class: "entry-fields" }, siteF, simpleF),
     pwBox,
     h("div", { class: "tune" }, lenInput, lenOut),
     h("div", { class: "switch-row" }, symSwitch, h("span", {}, "包含符号")),
@@ -639,7 +653,6 @@ async function addEntry(): Promise<void> {
   const entry: VaultEntry = {
     id: db.newId(),
     accountId: acc.id,
-    note: "",
     site: "",
     url: "",
     password: "",
