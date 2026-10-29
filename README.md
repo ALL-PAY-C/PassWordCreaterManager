@@ -1,41 +1,41 @@
 # PassWordCreaterManager
 
-Derives site passwords from two things you can remember, entirely offline, on Windows and Android.
+Deterministic derivation of site passwords from two locally retained secrets. Offline by design, for Windows and Android.
 
 ## Status
 
-Usable as a local tool. No telemetry, no analytics, no remote logging, no sync, no server, and no network calls at runtime.
+A usable local tool. No telemetry, analytics, remote logging, sync, server component, or network call at runtime.
 
-The derivation parameters are frozen at version 2. Changing any of them changes every password the app has ever produced, so they are not tunables.
+The derivation parameters are frozen at version 2. Any change to them changes every password the application has produced, so they are treated as constants rather than settings.
 
-## How it works
+## Overview
 
-Two layers feed a key derivation function, and the result is recomputed on demand rather than stored.
+Two layers of secret feed a key derivation function. Nothing that can reconstruct a derived password is stored; each password is recomputed on demand.
 
-Layer 1 is the app account: a name and a master password. It never leaves the device.
+Layer 1 belongs to the application: an account name and a master password, held on the device only.
 
-Layer 2 is per entry: the site account name and a simple password you would have used anyway, for example `github-2019`.
+Layer 2 belongs to a single entry: the account name used on a site and a simple password of the kind a person would reuse anyway, for example `github-2019`.
 
-Both layers are folded into a salt, stretched with PBKDF2, then expanded into a byte stream that selects characters.
+Both layers are folded into a salt, stretched with PBKDF2, and expanded into a byte stream that selects characters from a fixed charset.
 
 ### Derivation pipeline
 
 Inputs: `appName`, `appPassword`, `site`, `simple`, `length`, `counter`, `symbols`.
 
-1. Normalize: `norm(x) = trim(x).toLowerCase()`.
+1. Normalization: `norm(x) = trim(x).toLowerCase()`.
 2. Salt: `"pwvault:v2" + "|" + norm(appName) + "|" + norm(site) + "|" + simple`.
 3. Key: `PBKDF2-HMAC-SHA256(appPassword, salt, 100000 iterations, 32 bytes)`.
-4. Stream: `HMAC-SHA256(key, norm(site) + ":" + counter + ":" + block)` for `block = 0, 1, 2, ...`, concatenated until enough bytes exist. This stream is the only source of randomness.
-5. Selection: bytes are mapped onto `lower + upper + digits + symbols` by rejection sampling, skipping any byte `>= 256 - (256 % pool.length)`. Symbols are `!@#$%^&*()-_=+[]{}:,.<>?/`.
-6. Class guarantee: at least one character from each enabled class appears in the result.
-7. Order: Fisher-Yates over the same stream.
+4. Stream: `HMAC-SHA256(key, norm(site) + ":" + counter + ":" + block)` for `block = 0, 1, 2, ...`, concatenated until sufficient bytes exist. This stream is the only source of randomness.
+5. Selection: stream bytes are mapped onto `lower + upper + digits + symbols` by rejection sampling, skipping any byte `>= 256 - (256 % pool.length)`. The symbol set is `!@#$%^&*()-_=+[]{}:,.<>?/`.
+6. Class guarantee: at least one character of each enabled class is present in the result.
+7. Ordering: Fisher-Yates, driven by the same stream.
 8. Length: clamped to `8..64`. The counter is a per-entry integer; incrementing it yields an unrelated password for the same site.
 
-The output is the password you register on that site.
+The output is the string registered on the target site.
 
 ### Test vectors
 
-Inputs, shared by all rows: app account `allpay`, app password `123456`, site account `ABC`, simple password `github-abc`.
+Shared inputs: application account `allpay`, application password `123456`, site account `ABC`, simple password `github-abc`.
 
 | length | counter | symbols | expected output |
 | --- | --- | --- | --- |
@@ -43,26 +43,26 @@ Inputs, shared by all rows: app account `allpay`, app password `123456`, site ac
 | 24 | 1 | no | `TGstXqMWTIxAPH8TQiZwHTes` |
 | 20 | 2 | yes | `>%}3/:>.&U>vO#}/K^{h` |
 
-Normalization means `ALLPAY` and ` allpay ` derive the same passwords as `allpay`. Any build that disagrees with this table is broken.
+Because inputs are normalized, `ALLPAY` and ` allpay ` derive the same passwords as `allpay`. A build whose output differs from this table is defective.
 
 ## Threat model and limitations
 
-The design protects against password reuse: a password leaked by one site says nothing about your other sites, and nothing about either layer.
+The design addresses password reuse: a password disclosed by one site reveals nothing about other sites and nothing about either layer.
 
-It does not protect against the following.
+It does not address the following.
 
-- A compromised device. Code running in the app's context can read the master password as it is typed and read derived passwords as they are produced.
-- A keylogger, software or hardware.
-- A forgotten master password. There is no reset, no recovery code, and no vendor-side escrow. Lose layer 1 and every derived password is gone.
-- A malicious build. The offline claim rests on this source and the binary you compiled from it. A substituted WebView2 DLL or a repackaged APK can do anything.
-- A trivial simple password. Layer 2 is deliberately low entropy; the KDF raises the cost of guessing but does not turn `1234` into a strong secret.
-- Physical access to an unlocked session.
+- A compromised device. Code executing in the application context can read the master password during entry and read derived passwords as they are produced.
+- A keylogger, in software or hardware.
+- Loss of the master password. No reset, recovery code, or vendor escrow exists; without layer 1 every derived password becomes unrecoverable.
+- A modified build. The offline property holds for this source and the binary compiled from it; a substituted WebView2 assembly or a repackaged APK can behave arbitrarily.
+- A low-entropy simple password. Layer 2 is deliberately weak; the KDF raises guessing cost but does not turn `1234` into a strong secret.
+- Access to an unlocked session.
 
-Only the inputs are stored. A leaked app database exposes layer 1 and every simple password, which is equivalent to a leaked password manager vault.
+Only inputs are stored. A leaked application database exposes layer 1 and every simple password, which is equivalent to a leaked password-manager vault.
 
 ## Build
 
-Requirements: Node.js 20 or newer for the web assets, .NET Framework 4.8 with `csc.exe` (included in Windows) for the desktop host, JDK 17 and the Android SDK for the Android shell.
+Requirements: Node.js 20 or later for the web assets; .NET Framework 4.8 with `csc.exe`, included in Windows, for the desktop host; JDK 17 and the Android SDK for the Android shell.
 
 ### Web
 
@@ -79,9 +79,9 @@ Both native shells embed the contents of `dist/`.
 .\desktop\build.ps1
 ```
 
-The script packs `dist/` into an embedded resource, compiles `desktop/src/Launcher.cs` into `PassWordCreaterManager.exe`, and copies the WebView2 assemblies next to it. It looks for the Microsoft.Web.WebView2 package under `%USERPROFILE%\.nuget\packages`; pass `-WebView2Dir <path to lib\net462>` when it lives elsewhere.
+The script packs `dist/` into an embedded resource, compiles `desktop/src/Launcher.cs` into `PassWordCreaterManager.exe`, and copies the WebView2 assemblies alongside it. The Microsoft.Web.WebView2 package is located under `%USERPROFILE%\.nuget\packages`; `-WebView2Dir <path to lib\net462>` overrides that lookup.
 
-The output directory needs `PassWordCreaterManager.exe`, `Microsoft.Web.WebView2.Core.dll`, `Microsoft.Web.WebView2.WinForms.dll`, and `WebView2Loader.dll`. The exe will not start without them, and the machine needs the WebView2 runtime, which ships with Windows 11 and current Windows 10.
+The output directory requires `PassWordCreaterManager.exe`, `Microsoft.Web.WebView2.Core.dll`, `Microsoft.Web.WebView2.WinForms.dll`, and `WebView2Loader.dll`. The executable does not start without them, and the machine requires the WebView2 runtime, which ships with Windows 11 and current Windows 10.
 
 ### Android
 
@@ -90,27 +90,27 @@ cd android
 gradlew assembleRelease        # ANDROID_HOME and JAVA_HOME must be set
 ```
 
-The APK lands in `android/app/build/outputs/apk/release/`. The checked-in `app/debug.keystore` is a throwaway key so the release build runs out of the box; it is not suitable for distribution and carries no security value.
+The APK is written to `android/app/build/outputs/apk/release/`. The committed `app/debug.keystore` is a throwaway debug key present so the release build runs without local setup; it carries no distribution or security value.
 
 ## Architecture
 
-Web UI: TypeScript, Vite, Material Web components (`@material/web`), Material 3 Expressive styling, light/dark/system themes, five accent seeds, IndexedDB for storage. Derivation runs in the page through WebCrypto; nothing is computed natively.
+Web interface: TypeScript, Vite, Material Web components (`@material/web`), Material 3 Expressive styling, light, dark and system themes, five accent seeds, IndexedDB for storage. Derivation executes in the page through WebCrypto; no part of it is native.
 
-Desktop: a .NET Framework 4.8 WinForms window hosting WebView2. The page is served from an embedded zip through a virtual host mapped to `https://app.local`. The origin is fixed on purpose: IndexedDB is scoped per origin, so a stable origin keeps the local database alive across restarts and updates. Backups are written through the host bridge to the user's Downloads folder.
+Desktop host: a .NET Framework 4.8 WinForms window embedding WebView2. The page is served from an embedded zip through a virtual host mapped to `https://app.local`. The origin is fixed deliberately: IndexedDB is scoped per origin, so a stable origin keeps the local database intact across restarts and upgrades. Backups are written through the host bridge into the Downloads folder.
 
-Android: a minimal `WebView` shell built with AGP 8.13 (`compileSdk 36`, `minSdk 24`). Assets are served by `WebViewAssetLoader` at `https://appassets.androidplatform.net`, and a JavaScript bridge named `pvb` writes backups into the public Downloads collection.
+Android host: a minimal `WebView` shell built with AGP 8.13 (`compileSdk 36`, `minSdk 24`). Assets are served by `WebViewAssetLoader` at `https://appassets.androidplatform.net`, and a JavaScript bridge named `pvb` writes backups into the public Downloads collection.
 
 ## Usage
 
-First run: create an app account (name plus master password, at least eight characters). The lock screen lists accounts as chips and asks for the matching master password. "Remember" stores the choice and reopens the vault directly next time; "Lock" returns to the lock screen.
+First launch: creation of an application account, consisting of a name and a master password of at least eight characters. The lock screen lists existing accounts as chips and requires the matching master password. The remember option stores that choice and reopens the vault directly on subsequent launches; locking returns to the lock screen.
 
-Adding an entry: press the button at the bottom right, fill in a note, the site or service, an optional URL, and the simple password. The derived password appears immediately, masked. The eye button reveals it, the copy button always works, and the slider changes length while the switch drops or keeps symbols. The counter field produces a different password for the same site, which is how you rotate one.
+Adding an entry: a note, the site or service, an optional URL, and the simple password. The derived password appears immediately, masked. A reveal control unmasks it, and the copy control works whether or not the value is revealed. A slider sets the length, a switch controls the symbol class, and the counter field produces independent passwords for the same site, which is the rotation mechanism.
 
-Finding an entry: the search box filters by note, site, account, or URL. `Ctrl+K` focuses it, `Ctrl+N` creates an entry.
+Locating an entry: the search field filters by note, site, account, or URL. `Ctrl+K` focuses it and `Ctrl+N` creates an entry.
 
-Backups: the menu exports a JSON file, imports a file, or imports pasted JSON. Import merges by account name and drops duplicate entries. Treat the export as a credential.
+Backups: the menu exports a JSON file, imports a file, or imports pasted JSON. Import merges accounts by name and discards duplicate entries. An export is a credential and should be stored accordingly.
 
-Wipe: the menu clears the IndexedDB database and reloads into first-run state.
+Wiping: the menu clears the IndexedDB database and reloads into the first-launch state.
 
 ## Repository layout
 
@@ -121,7 +121,7 @@ PassWordCreaterManager/
   brand/              icon source (SVG), rasterized PNG, generated ICO
   desktop/            .NET Framework WinForms host and build.ps1
   android/            Gradle project, WebView shell
-  docs/screenshots/   screenshots used in this file
+  docs/screenshots/   screenshots used below
   dist/               build output, not tracked
 ```
 
@@ -133,7 +133,7 @@ PassWordCreaterManager/
 
 ## Backup file format
 
-UTF-8 JSON, two-space indented. `accounts` carries layer 1, `entries` carries layer 2. Derived passwords are absent by design: they are recomputed from the stored inputs.
+UTF-8 JSON with two-space indentation. The `accounts` array carries layer 1 and the `entries` array carries layer 2. Derived passwords are absent by design, being recomputed from the stored inputs.
 
 ```json
 {
@@ -162,24 +162,24 @@ UTF-8 JSON, two-space indented. `accounts` carries layer 1, `entries` carries la
 }
 ```
 
-`format` is checked on import. Files exported by the earlier PwVault build (`"format": "pwvault-backup"`) are still accepted.
+`format` is validated on import. Files produced by the earlier PwVault build (`"format": "pwvault-backup"`) remain accepted.
 
 ## Data locations
 
-- Web preview: IndexedDB database `PassWordCreaterManager` in the browser profile.
-- Desktop: `webview2data/` next to the exe, origin `https://app.local`.
+- Web preview: IndexedDB database `PassWordCreaterManager` inside the browser profile.
+- Desktop: `webview2data/` beside the executable, origin `https://app.local`.
 - Android: WebView storage for `https://appassets.androidplatform.net`.
 
 ## Compatibility
 
-Frozen: the salt prefix `pwvault:v2`, PBKDF2-HMAC-SHA256 at 100000 iterations with a 32-byte output, the HMAC-SHA256 stream construction, the charset and its order, rejection sampling, the one-character-per-class rule, Fisher-Yates over the same stream, and the `8..64` clamp. The salt prefix keeps its original spelling so passwords derived by earlier builds stay valid; it is an input string, not the product name.
+Frozen: the salt prefix `pwvault:v2`, PBKDF2-HMAC-SHA256 at 100000 iterations with a 32-byte output, the HMAC-SHA256 stream construction, the charset and its ordering, rejection sampling, the one-character-per-class rule, Fisher-Yates over the same stream, and the `8..64` clamp. The salt prefix retains its original spelling so passwords derived by earlier builds remain valid; it is an input string, not the product name.
 
-Windows and Android share one implementation and must stay byte-identical. The test vectors above are the check.
+Windows and Android share one implementation and must remain byte-identical. The vectors above are the check.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
 
 ## AI disclosure
 
-This project was generated by an AI coding agent (DeepSeek-based) from a specification written by the publisher, then reviewed, built, and tested by hand. The derivation algorithm, the web UI, the desktop host, and the Android shell were all produced this way. The vectors above were recomputed from an independent implementation and cross-checked against the shipped binary and the browser build. Read the source before trusting it with real credentials: `src/derive.ts` is short enough to audit end to end.
+This project was generated by an AI coding agent (DeepSeek-based) from a specification written by the publisher, then reviewed, built, and tested by hand. The derivation algorithm, the web interface, the desktop host, and the Android shell were all produced this way, and the vectors above were recomputed from an independent implementation and cross-checked against both shipped builds. The source is short enough to audit end to end, in particular `src/derive.ts`.
