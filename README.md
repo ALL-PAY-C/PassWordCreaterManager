@@ -4,7 +4,9 @@ Deterministic derivation of site passwords from two locally retained secrets. Of
 
 ## Status
 
-A usable local tool. No telemetry, analytics, remote logging, sync, server component, or network call at runtime.
+A personal project, written for learning and for the publisher's own daily use. It is not a commercial product, carries no support commitment, and has not been independently audited. It exists to demonstrate deterministic offline derivation, not to compete with a maintained password manager.
+
+No telemetry, analytics, remote logging, sync, server component, or network call at runtime.
 
 The derivation parameters are frozen at version 2. Any change to them changes every password the application has produced, so they are treated as constants rather than settings.
 
