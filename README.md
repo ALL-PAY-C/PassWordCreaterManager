@@ -2,6 +2,14 @@
 
 Deterministic derivation of site passwords from two locally retained secrets, offline, for Windows and Android.
 
+## Motivation
+
+The project started from a mundane irritation: passwords got forgotten, and every change of device or account turned into another reset. A written list invites reuse and copy-paste; remembering a handful of strong passwords proved unreliable in practice.
+
+Deterministic derivation solved both problems with one mechanism, so the tool was written for private use: open it when a password is needed, read the derived string, close it.
+
+Convenience set the priorities. Hardening received no attention during development, which means no secure-enclave integration, no memory-zeroing discipline, no protection against a compromised host, and no audit. A threat model that includes a hostile local environment calls for a different tool.
+
 ## Status
 
 A personal project, built for learning and for the publisher's own daily use. It runs as a demonstration of deterministic offline derivation, and carries the constraints that follow: a single maintainer, no support channel, no external audit.
