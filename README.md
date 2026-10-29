@@ -1,14 +1,14 @@
 # PassWordCreaterManager
 
-Deterministic derivation of site passwords from two locally retained secrets. Offline by design, for Windows and Android.
+Deterministic derivation of site passwords from two locally retained secrets, offline, for Windows and Android.
 
 ## Status
 
-A personal project, written for learning and for the publisher's own daily use. It is not a commercial product, carries no support commitment, and has not been independently audited. It exists to demonstrate deterministic offline derivation, not to compete with a maintained password manager.
+A personal project, built for learning and for the publisher's own daily use. It runs as a demonstration of deterministic offline derivation, and carries the constraints that follow: a single maintainer, no support channel, no external audit.
 
-No telemetry, analytics, remote logging, sync, server component, or network call at runtime.
+Computation happens entirely on the device. Telemetry, analytics, remote logging, sync, and any server component are absent by construction.
 
-The derivation parameters are frozen at version 2. Any change to them changes every password the application has produced, so they are treated as constants rather than settings.
+The derivation parameters are frozen at version 2. Any change to them changes every password the application has produced, so they hold as constants.
 
 ## Overview
 
@@ -57,7 +57,7 @@ It does not address the following.
 - A keylogger, in software or hardware.
 - Loss of the master password. No reset, recovery code, or vendor escrow exists; without layer 1 every derived password becomes unrecoverable.
 - A modified build. The offline property holds for this source and the binary compiled from it; a substituted WebView2 assembly or a repackaged APK can behave arbitrarily.
-- A low-entropy simple password. Layer 2 is deliberately weak; the KDF raises guessing cost but does not turn `1234` into a strong secret.
+- A low-entropy simple password. Layer 2 carries little entropy by construction; the KDF raises the cost of guessing without turning `1234` into a strong secret.
 - Access to an unlocked session.
 
 Only inputs are stored. A leaked application database exposes layer 1 and every simple password, which is equivalent to a leaked password-manager vault.
@@ -135,7 +135,7 @@ PassWordCreaterManager/
 
 ## Backup file format
 
-UTF-8 JSON with two-space indentation. The `accounts` array carries layer 1 and the `entries` array carries layer 2. Derived passwords are absent by design, being recomputed from the stored inputs.
+UTF-8 JSON with two-space indentation. The `accounts` array carries layer 1 and the `entries` array carries layer 2. Derived passwords stay out of the file entirely; they are recomputed from the stored inputs.
 
 ```json
 {
@@ -174,7 +174,7 @@ UTF-8 JSON with two-space indentation. The `accounts` array carries layer 1 and 
 
 ## Compatibility
 
-Frozen: the salt prefix `pwvault:v2`, PBKDF2-HMAC-SHA256 at 100000 iterations with a 32-byte output, the HMAC-SHA256 stream construction, the charset and its ordering, rejection sampling, the one-character-per-class rule, Fisher-Yates over the same stream, and the `8..64` clamp. The salt prefix retains its original spelling so passwords derived by earlier builds remain valid; it is an input string, not the product name.
+Frozen: the salt prefix `pwvault:v2`, PBKDF2-HMAC-SHA256 at 100000 iterations with a 32-byte output, the HMAC-SHA256 stream construction, the charset and its ordering, rejection sampling, the one-character-per-class rule, Fisher-Yates over the same stream, and the `8..64` clamp. The salt prefix retains its original spelling so passwords derived by earlier builds remain valid; as an input string it happens to predate the current name.
 
 Windows and Android share one implementation and must remain byte-identical. The vectors above are the check.
 
